@@ -1,7 +1,12 @@
 Telephony-Asterisk-AMI version {{$version}}, released {{$date}}
 
 
-This module {{ die "needs a description (README.md too)" }}.
+This module is a simple client for the Asterisk Manager Interface.
+It's better documented and less buggy than Asterisk::Manager, and
+has fewer prerequisites than Asterisk::AMI.
+
+If you need a more sophisticated client (especially for use in an
+event-driven program), try Asterisk::AMI.
 
 
 
