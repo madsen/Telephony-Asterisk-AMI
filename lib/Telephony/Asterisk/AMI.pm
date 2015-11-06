@@ -24,7 +24,7 @@ use warnings;
 use Carp ();
 use IO::Socket::IP ();
 
-our $VERSION = '0.001';
+our $VERSION = '0.002';
 # This file is part of {{$dist}} {{$dist_version}} ({{$date}})
 
 my $EOL = "\r\n";
@@ -150,6 +150,24 @@ sub connect {
 
   unless ($self->{socket}) {
     $self->{error} = "Connection failed: $@";
+    return undef;
+  }
+
+  # Verify that we've connected to Asterisk Call Manager
+  my $id = readline($self->{socket});
+
+  unless (defined $id) {
+    $self->{error} = "Connection closed without input: $!";
+    return undef;
+  }
+
+  chomp $id;
+  print { $self->{Debug_FH} } "<< $id\n" if $self->{Debug_FH};
+
+  if ($id =~ m!^Asterisk Call Manager/(.+)!) {
+    $self->{protocol} = $1;
+  } else {
+    $self->{error} = "Unknown Protocol";
     return undef;
   }
 
