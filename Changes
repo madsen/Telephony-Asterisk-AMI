@@ -1,6 +1,6 @@
 Revision history for Telephony-Asterisk-AMI
 
-0.002  NOT
+0.002  2015-11-07
 	- Validate Asterisk Call Manager header in connect method
 	- Add disconnect method
 	- In action method, check that the connection is open
