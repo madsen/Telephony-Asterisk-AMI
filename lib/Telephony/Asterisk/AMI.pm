@@ -21,6 +21,13 @@ use 5.008;
 use strict;
 use warnings;
 
+=head1 DEPENDENCIES
+
+Telephony::Asterisk::AMI depends on L<IO::Socket::IP>, which became a
+core module with Perl 5.20.  There are no other non-core dependencies.
+
+=cut
+
 use Carp ();
 use IO::Socket::IP ();
 
@@ -158,6 +165,7 @@ sub connect {
 
   unless (defined $id) {
     $self->{error} = "Connection closed without input: $!";
+    undef $self->{socket};
     return undef;
   }
 
@@ -168,6 +176,7 @@ sub connect {
     $self->{protocol} = $1;
   } else {
     $self->{error} = "Unknown Protocol";
+    undef $self->{socket};
     return undef;
   }
 
@@ -181,6 +190,7 @@ sub connect {
   # If login failed, set error
   unless ($response->{Response} eq 'Success') {
     $self->{error} = "Login failed: $response->{Message}";
+    undef $self->{socket};
     return undef;
   }
 
@@ -189,21 +199,64 @@ sub connect {
 } # end connect
 #---------------------------------------------------------------------
 
+=method disconnect
+
+  $success = $ami->disconnect;
+
+Logs off of Asterisk and closes the connection.
+C<$success> is true if the logoff was successful, or C<undef> on error.
+On failure, you can get the error message with C<< $ami->error >>.
+
+After a successful call to C<disconnect>, you may call C<connect>
+again to reestablish the connection.
+
+=cut
+
+sub disconnect {
+  my $self = shift;
+
+  my $response = $self->action({Action => 'Logoff'});
+
+  # If logoff failed, set error
+  unless ($response->{Response} eq 'Goodbye') {
+    $self->{error} = "Logoff failed: $response->{Message}";
+    undef $self->{socket};
+    return undef;
+  }
+
+  unless ($self->{socket}->close) {
+    $self->{error} = "Closing socket failed: $!";
+    undef $self->{socket};
+    return undef;
+  }
+
+  undef $self->{socket};
+
+  # Logoff successful
+  1;
+} # end disconnect
+#---------------------------------------------------------------------
+
 =method action
 
   $response = $ami->action(%args);
 
 Sends an action request to Asterisk and returns the response.  The
 C<%args> may be passed as a hashref or a list of S<C<< key => value
->>> pairs.
+>>> pairs, where the keys are the Asterisk field names.  To create
+more than one instance of a field, make the value an arrayref.
 
 The only required key is C<Action>.  (Asterisk may require other keys
 depending on the value of C<Action>, but that is not enforced by this
 module.)
 
-The C<$response> is a hashref formed from Asterisk's response.  It
-will have a C<Response> key whose value is either C<Success> or
-C<Error>.
+The C<$response> is a hashref formed from Asterisk's response in the
+same format as C<%args>.  It will have a C<Response> key whose value
+is either C<Success> or C<Error>.
+
+If you have not called the C<connect> method (or it failed), calling
+C<action> will return a manufactured Error response with Message
+"Not connected to Asterisk!".
 
 If communication with Asterisk fails, it will return a manufactured
 Error response with Message "Writing to socket failed: %s" or
@@ -218,9 +271,17 @@ sub action {
 
   Carp::croak("Required parameter 'Action' not defined") unless $act->{Action};
 
+  # Check that the connection is open
+  my $socket = $self->{socket};
+  unless ($socket) {
+    return {
+      Response => 'Error',
+      Message => "Not connected to Asterisk!",
+    };
+  }
+
   # Assemble the message to send to Asterisk
   my $debug_fh = $self->{Debug_FH};
-  my $socket = $self->{socket};
   my $id = $self->{ActionID}++;
   my $message = "ActionID: $id$EOL";
 
@@ -339,7 +400,7 @@ __END__
 
   my $response = $ami->action(Action => 'Ping');
 
-  $ami->action(Action => 'Logoff');
+  $ami->disconnect or die $ami->error;
 
 
 =head1 DESCRIPTION

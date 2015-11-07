@@ -2,6 +2,8 @@ Revision history for Telephony-Asterisk-AMI
 
 0.002  NOT
 	- Validate Asterisk Call Manager header in connect method
+	- Add disconnect method
+	- In action method, check that the connection is open
 
 0.001  2015-10-31
 	- Initial release
