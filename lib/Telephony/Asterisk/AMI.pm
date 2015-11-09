@@ -31,7 +31,7 @@ core module with Perl 5.20.  There are no other non-core dependencies.
 use Carp ();
 use IO::Socket::IP ();
 
-our $VERSION = '0.002';
+our $VERSION = '0.003';
 # This file is part of {{$dist}} {{$dist_version}} ({{$date}})
 
 my $EOL = "\r\n";
@@ -371,8 +371,9 @@ If communication with Asterisk fails, this method will return an error
 message describing the problem.
 
 If Asterisk returns "Response: Error" for some action, that does not
-set C<< $ami->error >>.  The one exception is the automatic Login action
-performed by the L</connect> method, which does set C<error> on failure.
+set C<< $ami->error >>.  The exceptions are the automatic Login and Logoff
+actions performed by the L</connect> and L</disconnect> methods, which
+do set C<error> on failure.
 
 It returns C<undef> if there has been no communication error.
 
