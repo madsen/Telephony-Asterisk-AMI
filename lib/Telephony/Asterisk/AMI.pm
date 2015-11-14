@@ -38,7 +38,7 @@ my $EOL = "\r\n";
 
 #=====================================================================
 
-=method new
+=method-construct new
 
   $ami = Telephony::Asterisk::AMI->new(%args);
 
@@ -93,11 +93,11 @@ received from Asterisk are prefixed with C<<< << >>>.
 
 =item C<Event_Callback>
 
-A coderef that is called when an event is received from Asterisk.  The
-event data is passed as a hashref, just like the return value of the
-C<action> method.  Events are only received while waiting for a
-response to an action.  You MUST NOT call any methods on C<$ami> from
-inside the callback.
+A coderef that is called when an event is received from Asterisk while
+the L</action> method is waiting for a response.  The event data is
+passed as a hashref, just like the return value of the C<action>
+method.  You MUST NOT call any methods on C<$ami> from inside the
+callback.
 (default: events are ignored)
 
 =back
@@ -132,7 +132,7 @@ sub new {
 } # end new
 #---------------------------------------------------------------------
 
-=method connect
+=method-main connect
 
   $success = $ami->connect;
 
@@ -199,7 +199,7 @@ sub connect {
 } # end connect
 #---------------------------------------------------------------------
 
-=method disconnect
+=method-main disconnect
 
   $success = $ami->disconnect;
 
@@ -237,7 +237,7 @@ sub disconnect {
 } # end disconnect
 #---------------------------------------------------------------------
 
-=method action
+=method-main action
 
   $response = $ami->action(%args);
 
@@ -302,7 +302,7 @@ sub action {
 } # end action
 #---------------------------------------------------------------------
 
-=method send_action
+=method-low send_action
 
   $actionid = $ami->send_action(%args);
 
@@ -365,7 +365,7 @@ sub send_action {
 } # end send_action
 #---------------------------------------------------------------------
 
-=method read_response
+=method-low read_response
 
   $response = $ami->read_response;
 
@@ -439,7 +439,7 @@ sub read_response {
 
 #---------------------------------------------------------------------
 
-=method error
+=method-main error
 
   $error_message = $ami->error;
 
@@ -490,6 +490,24 @@ either IPv4 or IPv6.
 
 If you need a more sophisticated client (especially for use in an
 event-driven program), try Asterisk::AMI.
+
+
+=head1 METHODS
+
+=begin Pod::Loom-group_method construct
+
+=head2 Constructor
+
+=begin Pod::Loom-group_method main
+
+=head2 Main Methods
+
+=begin Pod::Loom-group_method low
+
+=head2 Low-Level Methods
+
+You shouldn't normally need to use these methods, but sometimes you
+need more control over the communication with Asterisk.
 
 
 =head1 SEE ALSO
