@@ -74,8 +74,8 @@ The port number to connect to (if no port was specified with C<Host>).
 =item C<ActionID>
 
 The ActionID to start at.  Each call to L</action> increments the ActionID.
-(Note: The L</connect> method also consumes an ActionID for the
-implicit Login action.)
+(Note: The L</connect> & L</disconnect> methods also consume an ActionID for
+the implicit Login & Logoff actions.)
 (default: 1)
 
 =item C<Debug>
@@ -250,38 +250,90 @@ The only required key is C<Action>.  (Asterisk may require other keys
 depending on the value of C<Action>, but that is not enforced by this
 module.)
 
+Do not pass an C<ActionID> in C<%args>.  The ActionID is provided
+automatically.
+
 The C<$response> is a hashref formed from Asterisk's response in the
 same format as C<%args>.  It will have a C<Response> key whose value
-is either C<Success> or C<Error>.
+is either C<Success> or C<Error>.  Unless it's an error response, it
+will also have an C<ActionID> key whose value is the ActionID assigned
+to it.  (An error response might or might not have an ActionID.)
+
+Any events that are received while waiting for the response to the
+action are dispatched to the C<Event_Callback> (if any).  If no
+callback was provided, events are discarded.
 
 If you have not called the C<connect> method (or it failed), calling
 C<action> will return a manufactured Error response with Message
-"Not connected to Asterisk!".
+"Not connected to Asterisk!" and set C<< $ami->error >>.
 
 If communication with Asterisk fails, it will return a manufactured
 Error response with Message "Writing to socket failed: %s" or
-"Reading from socket failed: %s".  In this case, C<< $ami->error >>
-will also be set.
+"Reading from socket failed: %s" and set C<< $ami->error >>.
 
 =cut
 
 sub action {
+  my $self = shift;
+
+  # Send the request to Asterisk
+  my $id = $self->send_action(@_) or return {
+    Response => 'Error',
+    Message => $self->{error},
+  };
+
+  # Read responses until we get the response to this action
+  while (1) {
+    my $response = $self->read_response;
+
+    # If this is the response to the action we just sent,
+    # or there was an error, return it.
+    no warnings 'uninitialized';
+    if (($response->{ActionID} eq $id) ||
+        ($response->{Response} eq 'Error')) {
+      return $response;
+    }
+
+    # If there is an event callback, send it this event
+    if ($self->{Event_Callback}) {
+      $self->{Event_Callback}->($response);
+    }
+  } # end infinite loop waiting for response
+} # end action
+#---------------------------------------------------------------------
+
+=method send_action
+
+  $actionid = $ami->send_action(%args);
+
+Sends an action request to Asterisk and returns the ActionID.  The
+C<%args> are the same as for L</action>.
+
+Do not pass an C<ActionID> in C<%args>.  The ActionID is provided
+automatically and returned.
+
+If you have not called the C<connect> method (or it failed), calling
+C<send_action> will return C<undef> and set C<< $ami->error >> to
+"Not connected to Asterisk!".
+
+If communication with Asterisk fails, it will return C<undef> and set
+C<< $ami->error >> to "Writing to socket failed: %s".
+
+=cut
+
+sub send_action {
   my $self = shift;
   my $act = (@_ == 1) ? shift : { @_ };
 
   Carp::croak("Required parameter 'Action' not defined") unless $act->{Action};
 
   # Check that the connection is open
-  my $socket = $self->{socket};
-  unless ($socket) {
-    return {
-      Response => 'Error',
-      Message => "Not connected to Asterisk!",
-    };
+  unless ($self->{socket}) {
+    $self->{error} = "Not connected to Asterisk!";
+    return undef;
   }
 
   # Assemble the message to send to Asterisk
-  my $debug_fh = $self->{Debug_FH};
   my $id = $self->{ActionID}++;
   my $message = "ActionID: $id$EOL";
 
@@ -296,71 +348,95 @@ sub action {
   $message .= $EOL;             # Message ends with blank line
 
   # If debugging, print out the message before sending it
-  if ($debug_fh) {
+  if ($self->{Debug_FH}) {
     my $debug = $message;
     $debug =~ s/\r//g;
     $debug =~ s/^/>> /mg;
-    print $debug_fh $debug;
+    print { $self->{Debug_FH} } $debug;
   }
 
   # Send the request to Asterisk
-  unless (print $socket $message) {
+  unless (print { $self->{socket} } $message) {
+    $self->{error} = "Writing to socket failed: $!";
+    return undef;
+  }
+
+  $id;
+} # end send_action
+#---------------------------------------------------------------------
+
+=method read_response
+
+  $response = $ami->read_response;
+
+Reads a single message from Asterisk.  Blocks until a message arrives.
+The C<action> method waits for the response, so C<read_response>
+is only useful for reading events.
+
+It returns a hashref in the same format as the C<%args> for the
+C<action> method.
+
+Note that events received by C<read_response> are not delivered to the
+C<Event_Callback> (if any).  The callback is used only for events
+that are received during the execution of the C<action> method.
+
+If you have not called the C<connect> method (or it failed), calling
+C<action> will return a manufactured Error response with Message
+"Not connected to Asterisk!" and set C<< $ami->error >>.
+
+If communication with Asterisk fails, it will return a manufactured
+Error response with Message "Reading from socket failed: %s" and set
+C<< $ami->error >>.
+
+=cut
+
+sub read_response {
+  my $self = shift;
+
+  # Check that the connection is open
+  my $socket = $self->{socket};
+  unless ($socket) {
     return {
       Response => 'Error',
-      Message => $self->{error} = "Writing to socket failed: $!",
+      Message => $self->{error} = "Not connected to Asterisk!",
     };
   }
 
-  # Read responses until we get the response to this action
+  # Read a response terminated by a blank line
   local $/ = $EOL;
-  while (1) {
-    my %response;
-    my $line;
-    undef $!;
+  my $debug_fh = $self->{Debug_FH};
+  my ($line, %response);
+  undef $!;
 
-    # Read a response terminated by a blank line
-    while ($line = <$socket>) {
-      chomp $line;
-      print $debug_fh "<< $line\n" if $debug_fh;
+  while ($line = <$socket>) {
+    chomp $line;
+    print $debug_fh "<< $line\n" if $debug_fh;
 
-      last unless length $line;
+    return \%response unless length $line;
 
-      # Remove the key from the "Key: Value" line
-      # If the line is not in that format, ignore it.
-      $line =~ s/^([^:]+): // or next;
+    # Remove the key from the "Key: Value" line
+    # If the line is not in that format, ignore it.
+    $line =~ s/^([^:]+): // or next;
 
-      if (not exists $response{$1}) {
-        # First occurrence of this key, save as string
-        $response{$1} = $line;
-      } elsif (ref $response{$1}) {
-        # Third or more occurrence of this key, append to arrayref
-        push @{ $response{$1} }, $line;
-      } else {
-        # Second occurrence of this key, convert to arrayref
-        $response{$1} = [ $response{$1}, $line ];
-      }
+    if (not exists $response{$1}) {
+      # First occurrence of this key, save as string
+      $response{$1} = $line;
+    } elsif (ref $response{$1}) {
+      # Third or more occurrence of this key, append to arrayref
+      push @{ $response{$1} }, $line;
+    } else {
+      # Second occurrence of this key, convert to arrayref
+      $response{$1} = [ $response{$1}, $line ];
     }
+  } # end while reading from $socket
 
-    # If this is the response to the action we just sent,
-    # return it.
-    if (($response{ActionID} || '') eq $id) {
-      return \%response;
-    }
+  # There was a communication failure; return an error.
+  return {
+    Response => 'Error',
+    Message => $self->{error} = "Reading from socket failed: $!",
+  };
+} # end read_response
 
-    # If there was a communication failure, return an error.
-    if (!defined($line) && $!) {
-      return {
-        Response => 'Error',
-        Message => $self->{error} = "Reading from socket failed: $!",
-      };
-    }
-
-    # If there is an event callback, send it this event
-    if ($self->{Event_Callback}) {
-      $self->{Event_Callback}->(\%response);
-    }
-  } # end infinite loop waiting for response
-} # end action
 #---------------------------------------------------------------------
 
 =method error
@@ -422,3 +498,6 @@ L<https://wiki.asterisk.org/wiki/display/AST/Home>
 
 L<Asterisk::AMI> is a more sophisticated AMI client better suited for
 event-driven programs.
+
+If you're using L<POE>, you may want
+L<POE::Component::Client::Asterisk::Manager>.
