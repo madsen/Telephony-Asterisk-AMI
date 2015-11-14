@@ -1,6 +1,6 @@
 Revision history for Telephony-Asterisk-AMI
 
-0.003  NOT
+0.003  2015-11-14
 	- Add send_action and read_response methods
 	- Fix docs for error method (disconnect can set it)
 
