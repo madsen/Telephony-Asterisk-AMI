@@ -1,6 +1,6 @@
 Revision history for Telephony-Asterisk-AMI
 
-0.004  NOT
+0.004  2015-11-28
 	- Add tests (10-ami.t)
 
 0.003  2015-11-14
