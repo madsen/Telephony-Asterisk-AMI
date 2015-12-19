@@ -1,6 +1,7 @@
 Revision history for Telephony-Asterisk-AMI
 
-0.005  NOT
+0.005  2015-12-19
+	- No functional changes
 	- Clarify docs for read_response method
 
 0.004  2015-11-28
