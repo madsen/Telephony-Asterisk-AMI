@@ -31,7 +31,7 @@ core module with Perl 5.20.  There are no other non-core dependencies.
 use Carp ();
 use IO::Socket::IP ();
 
-our $VERSION = '0.004';
+our $VERSION = '0.005';
 # This file is part of {{$dist}} {{$dist_version}} ({{$date}})
 
 my $EOL = "\r\n";
@@ -371,17 +371,18 @@ sub send_action {
 
 Reads a single message from Asterisk.  Blocks until a message arrives.
 The C<action> method waits for the response, so C<read_response>
-is only useful for reading events.
+is only useful for reading events (or if you used the low-level
+C<send_action> method).
 
-It returns a hashref in the same format as the C<%args> for the
-C<action> method.
+It returns a hashref in the same format as the return value of the
+C<action> method.  See that for details.
 
 Note that events received by C<read_response> are not delivered to the
 C<Event_Callback> (if any).  The callback is used only for events
 that are received during the execution of the C<action> method.
 
 If you have not called the C<connect> method (or it failed), calling
-C<action> will return a manufactured Error response with Message
+C<read_response> will return a manufactured Error response with Message
 "Not connected to Asterisk!" and set C<< $ami->error >>.
 
 If communication with Asterisk fails, it will return a manufactured
