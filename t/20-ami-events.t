@@ -1,6 +1,6 @@
 #! /usr/local/bin/perl
 #---------------------------------------------------------------------
-# Test Telephony::Asterisk::AMI
+# Test Telephony::Asterisk::AMI with active Event_Callback
 #
 # Copyright 2015 Christopher J. Madsen
 #---------------------------------------------------------------------
@@ -9,7 +9,7 @@ use 5.008;
 use strict;
 use warnings;
 
-use Test::More 0.88 tests => 23; # done_testing
+use Test::More 0.88 tests => 31; # done_testing
 use t::Fake_Socket;
 
 use Telephony::Asterisk::AMI ();
@@ -94,13 +94,19 @@ Message: Thanks for all the fish.
 
 END INPUT 1
 
+my @events;
+
 my $ami = Telephony::Asterisk::AMI->new(
   Username => 'user',
   Secret => 'secret',
+  Event_Callback => sub { push @events, @_ },
   #Debug => 1,
 );
 
 isa_ok($ami, 'Telephony::Asterisk::AMI');
+
+is_deeply(\@events, [], 'no events from constructor');
+@events = ();
 
 #.....................................................................
 ok($ami->connect, "connected");
@@ -115,6 +121,9 @@ is_deeply(
   'socket args correct');
 
 is($ami->error, undef, 'connect did not set error');
+
+is_deeply(\@events, [], 'no events from connect');
+@events = ();
 
 is(socket_output,
    "ActionID: 1\r\nAction: Login\r\nSecret: secret\r\nUsername: user\r\n\r\n",
@@ -139,6 +148,29 @@ is_deeply(
 
 is($ami->error, undef, 'Originate did not set error');
 
+is_deeply(\@events, [
+    {
+      Event     => "FullyBooted",
+      Privilege => "system,all",
+      Status    => "Fully Booted",
+    },
+    {
+      Event         => "SuccessfulAuth",
+      AccountID     => "monitor",
+      EventTV       => "2015-11-28T11:56:38.090-0600",
+      EventVersion  => 1,
+      LocalAddress  => "IPV4/TCP/0.0.0.0/5038",
+      Privilege     => "security,all",
+      RemoteAddress => "IPV4/TCP/127.0.0.1/34314",
+      Service       => "AMI",
+      SessionID     => "0x7fdef0015978",
+      SessionTV     => "2015-11-28T11:56:38.090-0600",
+      Severity      => "Informational",
+      UsingPassword => 0,
+    },
+  ], 'events during Originate');
+@events = ();
+
 is(socket_output,
    "ActionID: 2\r\nAction: Originate\r\nChannel: LOCAL/invalid\r\n"
        . "Context: default\r\nExten: 100\r\nPriority: 1\r\n"
@@ -157,6 +189,22 @@ is_deeply(
   'Ping successful');
 
 is($ami->error, undef, 'Ping did not set error');
+
+is_deeply(\@events, [
+    {
+      Event  => "InOrder",
+      Single => "This field appears once.",
+      Double => ["This field appears", "two times."],
+      Triple => ["This field appears", "three", "times."],
+    },
+    {
+      Event  => "MixedOrder",
+      Single => "This field appears once.",
+      Double => ["This field appears", "two times."],
+      Triple => ["This field appears", "three", "times."],
+    },
+  ], 'events during Ping');
+@events = ();
 
 is(socket_output,
    "ActionID: 3\r\nAction: Ping\r\n\r\n",
@@ -178,6 +226,9 @@ is_deeply(
 
 is($ami->error, undef, 'CoreStatus did not set error');
 
+is_deeply(\@events, [], 'no events during CoreStatus');
+@events = ();
+
 is(socket_output,
    "ActionID: 4\r\nAction: CoreStatus\r\n\r\n",
    'CoreStatus output correct');
@@ -195,6 +246,9 @@ is_deeply(
   'TestInput successful');
 
 is($ami->error, undef, 'TestInput did not set error');
+
+is_deeply(\@events, [], 'no events during TestInput');
+@events = ();
 
 is(socket_output,
    "ActionID: 5\r\nAction: TestInput\r\n\r\n",
@@ -214,6 +268,9 @@ is_deeply(
 
 is($ami->error, undef, 'TestInputMixed did not set error');
 
+is_deeply(\@events, [], 'no events during TestInputMixed');
+@events = ();
+
 is(socket_output,
    "ActionID: 6\r\nAction: TestInputMixed\r\n\r\n",
    'TestInputMixed output correct');
@@ -222,6 +279,9 @@ is(socket_output,
 ok($ami->disconnect, 'disconnected');
 
 is($ami->error, undef, 'disconnect did not set error');
+
+is_deeply(\@events, [], 'no events from disconnect');
+@events = ();
 
 is(socket_output,
    "ActionID: 7\r\nAction: Logoff\r\n\r\n",

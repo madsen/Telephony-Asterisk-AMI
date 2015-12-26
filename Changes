@@ -1,5 +1,8 @@
 Revision history for Telephony-Asterisk-AMI
 
+0.006  NOT
+	- Add tests for Event_Callback (20-ami-events.t)
+
 0.005  2015-12-19
 	- No functional changes
 	- Clarify docs for read_response method

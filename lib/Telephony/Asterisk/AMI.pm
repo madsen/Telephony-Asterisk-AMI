@@ -31,7 +31,7 @@ core module with Perl 5.20.  There are no other non-core dependencies.
 use Carp ();
 use IO::Socket::IP ();
 
-our $VERSION = '0.005';
+our $VERSION = '0.006';
 # This file is part of {{$dist}} {{$dist_version}} ({{$date}})
 
 my $EOL = "\r\n";
