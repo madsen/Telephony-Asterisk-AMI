@@ -1,6 +1,7 @@
 Revision history for Telephony-Asterisk-AMI
 
-0.006  NOT
+0.006  2015-12-26
+	- No functional changes
 	- Add tests for Event_Callback (20-ami-events.t)
 
 0.005  2015-12-19
